@@ -1,0 +1,64 @@
+services:
+  sample-service:
+    image: node:6.9.5-alpine
+    command: node test.js
+    networks:
+      - gatling_network
+    volumes:
+      - ./sample-service/test.js:/test.js:ro
+    ports:
+      - "8000:8000"
+  gatling:
+    #image: gatling-3.11.5
+    build:
+      context: gatling
+    scale: 1 # Scale to see the result of multiple nodes
+    #command: ["gatling:test"]
+    networks:
+      - gatling_network
+    depends_on:
+      - grafana
+    volumes:
+      - ./gatling/simulations:/opt/gatling-charts-highcharts-bundle-3.11.5/test/java/simulations
+      - ./gatling/results:/opt/gatling-charts-highcharts-bundle-3.11.5/target
+  influxdb:
+    image: influxdb:2.7.7-alpine
+    container_name: influxdb
+    hostname: influxdb
+    networks:
+      - gatling_network
+    ports:
+      - "8083:8083"
+      - "8086:8086"
+      - "2003:2003"
+  
+  influxdb_cli:
+    links:
+      - influxdb
+    image: influxdb:2.7.7-alpine
+    volumes:
+      # Mount for influxdb data directory and configuration
+      - /home/svl/influxdb2:/var/lib/influxdb2:rw
+    environment: 
+       # Use these same configurations parameters in your telegraf configuration, mytelegraf.conf.
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=myusername
+      - DOCKER_INFLUXDB_INIT_PASSWORD=passwordpasswordpassword
+      - DOCKER_INFLUXDB_INIT_ORG=myorg
+      - DOCKER_INFLUXDB_INIT_BUCKET=mybucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mytoken
+      - INFLUXD_TLS_CERT=/etc/ssl/influxdb-selfsigned.crt
+      - INFLUXD_TLS_KEY=/etc/ssl/influxdb-selfsigned.key
+    entrypoint: ["./entrypoint.sh"]
+    restart: on-failure:10
+    depends_on:
+      - influxdb
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    networks:
+      - gatling_network
+    ports:
+      - "3000:3000"
+networks:
+  gatling_network:

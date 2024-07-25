@@ -1,46 +1,52 @@
-version: "2.2"
 services:
   sample-service:
     image: node:6.9.5-alpine
     command: node test.js
-    networks:
-      - gatling_network
     volumes:
       - ./sample-service/test.js:/test.js:ro
     ports:
       - "8000:8000"
-  gatling-runner:
-    image: gatling:2.3.0
-    scale: 2 # Scale to see the result of multiple nodes
+  gatling:
+    #image: gatling-3.11.5
     build:
-      context: gatling/2.3.0
-    command: [-s, sample.SampleService]
-    networks:
-      - gatling_network
+      context: gatling
+    scale: 1 # Scale to see the result of multiple nodes
+    #command: ["gatling:test"]
     depends_on:
       - grafana
-    environment:
-      - LOCAL_USER_ID=`id -u $USER`
     volumes:
-      - ./gatling/2.3.0/simulations:/opt/app/java/gatling/user-files/simulations
-      - ./gatling/2.3.0/results:/opt/app/java/gatling/results
+      - ./gatling/simulations:/opt/gatling-charts-highcharts-bundle-3.11.5/test/java/simulations
+      - ./gatling/results:/opt/gatling-charts-highcharts-bundle-3.11.5/target
   influxdb:
-    image: influxdb:2.3.0
-    build:
-      context: influxdb/1.2.0-alpine
-    networks:
-      - gatling_network
+    image: influxdb:latest
     ports:
-      - "8083:8083"
-      - "8086:8086"
-      - "2003:2003"
+      - '8086:8086'
+    volumes:
+      - influxdb-storage:/var/lib/influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
   grafana:
-    image: grafana
-    build:
-      context: grafana
-    networks:
-      - gatling_network
+    image: grafana/grafana:latest
     ports:
-      - "3000:3000"
-networks:
-  gatling_network:
+      - '3000:3000'
+      - "2003:2003"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning/
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=${GRAFANA_PLUGIN}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+volumes:
+  influxdb-storage:
+  grafana-storage:
